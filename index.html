@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Dungeon PvP PoC v0.9 — Mobile Swipe Combat</title>
+<meta name="theme-color" content="#000000" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<style>
+  :root{--bg:#050505;--panel:#0b0b0b;--ink:#f4f4f0;--muted:#9a9a94;--red:#ef2b2b;--gray:#3d3d3a;--dark:#151515}
+  *{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+  html,body{margin:0;width:100%;height:100%;background:#000;color:var(--ink);overflow:hidden;overscroll-behavior:none}
+  body{font-family:"Courier New",ui-monospace,monospace;background:repeating-linear-gradient(0deg,#050505 0 3px,#070707 3px 4px);image-rendering:pixelated}
+  button{font:700 12px/1.15 "Courier New",monospace;letter-spacing:.03em;color:var(--ink);background:#0c0c0c;border:2px solid #d8d8d2;border-radius:0;padding:9px 10px;box-shadow:3px 3px 0 #333}
+  button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #333}
+  .app{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:7px;padding:8px;max-width:1280px;margin:0 auto;padding-top:max(8px,env(safe-area-inset-top));padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:2px solid #ddd;padding:1px 0 6px}
+  .brand{font-size:19px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}.brand::first-letter{color:var(--red)}
+  .brand small{display:block;color:#8b8b86;font-size:9px;font-weight:700;letter-spacing:.12em;margin-top:2px}
+  .phase{padding:5px 8px;border:1px solid #cfcfc8;background:#080808;font-size:10px;color:var(--red);font-weight:900;text-transform:uppercase}
+  .stage{min-height:0;position:relative;overflow:hidden}.screen{height:100%;display:none}.screen.active{display:block}
+  #buildScreen{display:none;grid-template-columns:minmax(0,1fr) 216px;gap:7px}#buildScreen.active{display:grid}
+  .panel{background:#080808;border:2px solid #d8d8d2;border-radius:0;box-shadow:5px 5px 0 #242424}
+  .gridWrap{display:flex;align-items:center;justify-content:center;padding:8px;min-height:0;overflow:hidden}
+  .buildBoard{position:relative;width:min(100%,760px);aspect-ratio:12/10;background:#000;border:2px solid #555}
+  #buildGrid{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:repeat(10,1fr);gap:1px;width:100%;height:100%;background:#333}
+  #buildNpcLayer{position:absolute;inset:0;pointer-events:none;z-index:5}
+  .cell{position:relative;background:#060606;border:0;overflow:hidden;image-rendering:pixelated;touch-action:pan-y}
+  .cell::after{content:"";position:absolute;inset:0;opacity:.45;pointer-events:none;background-image:radial-gradient(circle,#343434 0 1px,transparent 1px);background-size:7px 7px}
+  .cell.floor{background:#080808}
+  .cell.wall{background:repeating-linear-gradient(90deg,#e6e6df 0 5px,#9a9a94 5px 7px,#161616 7px 9px);box-shadow:inset 0 0 0 2px #efefea}
+  .cell.wall::after{background:repeating-linear-gradient(0deg,transparent 0 7px,#080808 7px 9px);opacity:.7}
+  .cell.spawnG{background:radial-gradient(circle at 50% 52%,var(--red) 0 11%,#fff 12% 18%,#1a1a1a 19% 30%,#080808 31%)}
+  .cell.spawnS{background:repeating-radial-gradient(circle at 50% 50%,#f2f2ec 0 2px,#111 2px 4px,var(--red) 4px 5px,#080808 5px 8px)}
+  .cell.trap{background:linear-gradient(135deg,transparent 45%,var(--red) 46% 54%,transparent 55%),linear-gradient(45deg,transparent 45%,#ddd 46% 54%,transparent 55%),#080808;background-size:13px 13px}
+  .cell.torch{background:radial-gradient(circle at 50% 37%,#fff 0 5%,var(--red) 6% 17%,#111 18% 26%,#080808 27%)}
+  .cell.core{background:radial-gradient(circle,#fff 0 8%,var(--red) 9% 23%,#050505 24% 38%,var(--red) 39% 42%,#050505 43%)}
+  .cell.entry{background:linear-gradient(90deg,#ecece7 0 12%,#080808 12% 88%,#ecece7 88%);box-shadow:inset 0 0 0 2px #ddd}
+  .npcdot{position:absolute;width:3.2%;min-width:8px;aspect-ratio:1;background:#f5f5ef;border:2px solid #080808;box-shadow:2px 0 0 var(--red),-2px 0 0 #555;transform:translate(-50%,-50%);pointer-events:none;will-change:left,top}
+  .npcdot::before{content:"";position:absolute;width:2px;height:2px;background:#050505;left:2px;top:2px;box-shadow:5px 0 0 #050505}
+  .npcdot.spider{background:var(--red);border-color:#eee;box-shadow:4px 0 0 #eee,-4px 0 0 #eee,0 4px 0 #eee}
+  .palette{padding:10px;display:flex;flex-direction:column;gap:7px;overflow:auto}.palette h3{margin:0 0 2px;font-size:13px;color:var(--red);letter-spacing:.12em}
+  .tool{display:block;text-align:left;width:100%;padding:8px;border-color:#5a5a56;color:#ddd;box-shadow:none}.tool span:last-child{display:block;color:#777;font-size:9px;margin-top:2px}
+  .tool.active{border-color:#fff;background:#f2f2ec;color:#050505;box-shadow:3px 3px 0 var(--red)}.tool.active span:last-child{color:#333}
+  .hint{font-size:9px;line-height:1.5;color:#aaa;padding:7px;border-left:3px solid var(--red);background:#030303}
+  .readyRow{display:grid;grid-template-columns:1fr 1fr;gap:6px}.ready{border-color:#fff}.clear{border-color:#777;color:#aaa}
+  #raidScreen{position:relative;overflow:hidden;background:#000;border-radius:0;touch-action:none}
+  #view{width:100%;height:100%;display:block;background:#000;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none}
+  .hud{position:absolute;inset:0;pointer-events:none}.status{position:absolute;left:9px;top:8px;display:flex;gap:5px;align-items:center}
+  .pill{background:#050505;border:1px solid #ddd;border-radius:0;padding:5px 7px;font-size:10px;box-shadow:2px 2px 0 #333}.pill b{color:var(--red)}
+  .pip{position:absolute;right:8px;top:8px;width:min(31vw,202px);aspect-ratio:16/10;border-radius:0;overflow:hidden;border:2px solid var(--red);background:#000;box-shadow:3px 3px 0 #333}
+  #pipView{width:100%;height:100%;display:block;image-rendering:pixelated}.pipLabel{position:absolute;left:3px;top:3px;font-size:8px;background:#000;color:#fff;padding:2px 4px;border:1px solid #777}
+  .cross{display:none}
+  .combatState{position:absolute;left:50%;top:10px;transform:translateX(-50%);font-size:9px;font-weight:900;letter-spacing:.08em;background:#050505;color:#ddd;border:1px solid #666;padding:4px 7px;opacity:0;white-space:nowrap}.combatState.on{opacity:1;border-color:var(--red);color:#fff}.combatState b{color:var(--red)}
+  .damageFlash{position:absolute;inset:0;background:rgba(239,43,43,.0);pointer-events:none;z-index:7}.damageFlash.on{animation:hitflash .28s steps(2,end)}.damageFlash.fatal{animation:fatalflash .7s steps(4,end) forwards}@keyframes hitflash{0%{background:rgba(239,43,43,.58)}50%{background:rgba(239,43,43,.08)}100%{background:rgba(239,43,43,0)}}@keyframes fatalflash{0%{background:rgba(239,43,43,.25)}35%{background:rgba(239,43,43,.75)}100%{background:#000}}
+  #raidScreen.hitShake{animation:hitshake .22s steps(2,end)}@keyframes hitshake{0%{transform:translate(0,0)}25%{transform:translate(-4px,1px)}50%{transform:translate(4px,-1px)}75%{transform:translate(-2px,0)}100%{transform:translate(0,0)}}
+  .telegraph{position:absolute;left:50%;bottom:23%;transform:translateX(-50%);font-size:11px;font-weight:900;background:var(--red);color:#fff;border:2px solid #fff;padding:5px 8px;border-radius:0;opacity:0}.telegraph.on{opacity:1}
+  .reactionPause{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);text-align:center;font-weight:900;letter-spacing:.1em;font-size:20px;line-height:1;color:#fff;background:#050505;border:3px solid var(--red);box-shadow:5px 5px 0 #fff;padding:11px 16px;border-radius:0;opacity:0;pointer-events:none}.reactionPause small{display:block;margin-top:6px;font-size:9px;color:#ddd}.reactionPause.on{opacity:1}
+  .controls{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 9px;pointer-events:none}.controls button{pointer-events:auto;min-width:78px;min-height:46px;background:#050505}
+  #parryBtn{border-color:#fff}#parryBtn::first-letter{color:var(--red)}#skillBtn{border-color:var(--red)}.cool{opacity:.35}
+  .dashHint{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);font-size:8px;color:#aaa;background:#050505;padding:3px 5px;border:1px solid #555;white-space:nowrap}
+  .toast{position:absolute;left:50%;top:17%;transform:translateX(-50%);background:#050505;padding:6px 9px;border:2px solid #fff;font-size:10px;opacity:0}.toast.on{opacity:1}
+  .bottom{display:flex;align-items:center;justify-content:space-between;color:#777;font-size:9px;gap:10px}.bottom strong{color:var(--red)}
+  .result{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.86);z-index:10}.result.show{display:flex}.resultCard{width:min(92vw,430px);padding:17px}.resultCard h2{margin:0 0 8px;color:var(--red);letter-spacing:.12em}.result.gameover{background:#000}.result.gameover .resultCard{border-color:var(--red);box-shadow:7px 7px 0 #550000}.result.gameover .resultCard h2{font-size:34px;text-align:center;animation:deadpulse 1s steps(2,end) infinite}@keyframes deadpulse{50%{color:#fff}}.resultCard p{color:#aaa;line-height:1.55;font-size:11px}.resultCard button{width:100%;margin-top:8px}
+  [data-phase="build"] .stage{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;touch-action:pan-y}
+  [data-phase="build"] #buildScreen,[data-phase="build"] .gridWrap,[data-phase="build"] .palette{touch-action:pan-y}
+  [data-phase="raid"] .stage{overflow:hidden;touch-action:none}
+  @media(max-width:720px){
+    .app{height:100dvh;max-height:100dvh;padding:4px;padding-top:max(4px,env(safe-area-inset-top));padding-bottom:max(4px,env(safe-area-inset-bottom));gap:4px;grid-template-rows:auto minmax(0,1fr)}
+    .topbar{padding:2px 0 5px;background:#050505;z-index:20}
+    .brand{font-size:14px}.brand small{font-size:8px}.phase{font-size:9px;padding:5px 7px}
+    .stage{min-height:0}
+    #buildScreen.active{display:flex;flex-direction:column;height:auto;min-height:max-content;gap:5px}
+    .gridWrap{display:block;flex:0 0 auto;padding:3px;overflow:visible;min-height:0}
+    .buildBoard{width:100%;max-width:none;aspect-ratio:12/10}
+    .palette{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:6px;overflow:visible;max-height:none}
+    .palette h3,.hint,.readyRow{grid-column:1/-1}
+    .palette h3{font-size:12px}.tool{font-size:10px;padding:7px 4px;min-height:42px;touch-action:manipulation}.tool span:last-child{display:none}
+    .hint{font-size:9px;line-height:1.45;padding:6px}.readyRow button{min-height:42px;touch-action:manipulation}
+    .bottom{display:none}
+    #raidScreen.active{height:100%;min-height:0}
+    .status{left:5px;top:5px;gap:3px}.pill{font-size:8px;padding:4px 5px}
+    .pip{right:5px;top:5px;width:min(34vw,150px);border-width:1px;box-shadow:2px 2px 0 #333}.pipLabel{font-size:6px}
+    .combatState{top:42px;max-width:92vw;overflow:hidden;text-overflow:ellipsis;font-size:7px;padding:3px 5px}
+    .reactionPause{top:46%;font-size:clamp(14px,4.8vw,20px);padding:9px 11px;max-width:88vw}.reactionPause small{font-size:8px;line-height:1.35}
+    .telegraph{bottom:15%;font-size:9px;max-width:90vw;text-align:center}
+    .toast{top:12%;font-size:9px;max-width:86vw;text-align:center}
+    .dashHint{left:8px;right:8px;bottom:6px;transform:none;width:auto;white-space:normal;text-align:center;font-size:7px;line-height:1.35}
+    .resultCard{width:94vw;padding:14px}
+  }
+  @media(max-width:390px){.palette{grid-template-columns:repeat(2,minmax(0,1fr))}.tool{font-size:9px}.brand{font-size:13px}}
+</style>
+</head>
+<body data-phase="build">
+<div class="app">
+  <div class="topbar">
+    <div class="brand">DUNGEON PvP <small>BUILD / LIVE / RAID</small></div>
+    <div id="phasePill" class="phase">BUILD</div>
+  </div>
+  <div class="stage">
+    <section id="buildScreen" class="screen active">
+      <div class="panel gridWrap"><div class="buildBoard"><div id="buildGrid"></div><div id="buildNpcLayer"></div></div></div>
+      <aside class="panel palette">
+        <h3>ピース</h3>
+        <button class="tool active" data-tool="wall">壁 <span>通路・死角を作る</span></button>
+        <button class="tool" data-tool="spawnG">ゴブリン巣 <span>徘徊NPC</span></button>
+        <button class="tool" data-tool="spawnS">蜘蛛巣 <span>徘徊NPC</span></button>
+        <button class="tool" data-tool="trap">罠 <span>接触ダメージ</span></button>
+        <button class="tool" data-tool="torch">松明 <span>視認性</span></button>
+        <button class="tool" data-tool="erase">消去 <span>床に戻す</span></button>
+        <div class="hint">入口は左上、コアは右下。一本道である必要はありませんが、少なくとも1本は通れる経路が必要です。構築中から巣のNPCがうろつきます。</div>
+        <div class="readyRow"><button id="clearBtn" class="clear">初期化</button><button id="readyBtn" class="ready">READY</button></div>
+      </aside>
+    </section>
+
+    <section id="raidScreen" class="screen panel">
+      <canvas id="view" width="320" height="180"></canvas>
+      <div class="hud">
+        <div class="status"><div class="pill">HP <b id="hp">100</b></div><div class="pill">敵コアまで <b id="dist">--</b></div></div>
+        <div class="pip"><canvas id="pipView" width="160" height="100"></canvas><div class="pipLabel">敵勇者 / あなたのダンジョン</div></div>
+        <div class="cross"></div>
+        <div id="combatState" class="combatState">ENGAGED — ENEMY HP <b id="enemyHp">--</b> — <b id="combatHint">READ</b></div>
+        <div id="damageFlash" class="damageFlash"></div>
+        <div id="telegraph" class="telegraph">敵の構えを見てスワイプ</div><div id="reactionPause" class="reactionPause">READ ATTACK<br><small>構えに応じた方向へSWIPE</small></div>
+        <div id="toast" class="toast"></div>
+        <div class="dashHint">探索: ↑前進 / ↓後退 / ←→旋回　　戦闘: 構えに応じてSWIPE　　PARRY後: SWIPEで部位反撃</div>
+      </div>
+      <div id="result" class="result"><div class="panel resultCard"><h2 id="resultTitle">RESULT</h2><p id="resultText"></p><button id="againBtn">構築へ戻る</button></div></div>
+    </section>
+  </div>
+  <div class="bottom"><span><strong>PoC v0.9</strong>：モバイル最適化＋完全スワイプ戦闘</span><span>Vanilla HTML / JS</span></div>
+</div>
+<script>
+(() => {
+const W=12,H=10, ENTRY={x:0,y:1}, CORE={x:11,y:8};
+const GAME_SPEED=.60, REACTION_FREEZE=.82, REACTION_COOLDOWN=.55;
+const ENEMY_ATTACK_INTERVAL=2.35, ENEMY_WINDUP=.72, RIPOSTE_WINDOW=1.35;
+const ATTACK_PATTERNS=[
+ {id:'OVERHEAD',label:'OVERHEAD',zone:'HEAD',damage:18,parry:['left','right'],hint:'← / → で受け流す'},
+ {id:'CUT_L',label:'LEFT CUT',zone:'RIGHT ARM',damage:12,parry:['left'],hint:'← へ払う'},
+ {id:'CUT_R',label:'RIGHT CUT',zone:'LEFT ARM',damage:12,parry:['right'],hint:'→ へ払う'},
+ {id:'THRUST',label:'THRUST',zone:'TORSO',damage:15,parry:['down'],hint:'↓ へ落とす'}
+];
+const RIPOSTE_ATTACKS={
+ up:{zone:'HEAD',damage:26,label:'HEAD CUT'},
+ down:{zone:'TORSO',damage:19,label:'BODY THRUST'},
+ left:{zone:'RIGHT ARM',damage:13,label:'RIGHT ARM CUT'},
+ right:{zone:'LEFT ARM',damage:13,label:'LEFT ARM CUT'}
+};
+let selected='wall', phase='build', raf=0, last=performance.now(), buildT=0;
+let reactionPause=0, reactionCooldown=0, activePattern=null;
+let userMap, enemyMap, buildNPCs=[];
+const grid=document.getElementById('buildGrid'), npcLayer=document.getElementById('buildNpcLayer');
+const phasePill=document.getElementById('phasePill');
+const buildScreen=document.getElementById('buildScreen'), raidScreen=document.getElementById('raidScreen');
+const view=document.getElementById('view'), ctx=view.getContext('2d');
+const pipView=document.getElementById('pipView'), pctx=pipView.getContext('2d');
+const hpEl=document.getElementById('hp'), distEl=document.getElementById('dist'), telegraph=document.getElementById('telegraph'), reactionPauseEl=document.getElementById('reactionPause'), toast=document.getElementById('toast');
+const combatStateEl=document.getElementById('combatState'), enemyHpEl=document.getElementById('enemyHp'), combatHintEl=document.getElementById('combatHint'), damageFlash=document.getElementById('damageFlash');
+const result=document.getElementById('result'), resultTitle=document.getElementById('resultTitle'), resultText=document.getElementById('resultText');
+
+function baseMap(){
+ const m=Array.from({length:H},()=>Array(W).fill(0));
+ // light default architecture with branches
+ [[3,0],[3,1],[3,2],[3,3],[7,2],[7,3],[7,4],[7,5],[1,6],[2,6],[3,6],[4,6],[9,6],[10,6]].forEach(([x,y])=>m[y][x]=1);
+ m[ENTRY.y][ENTRY.x]=0;m[CORE.y][CORE.x]=0;return m;
+}
+function clearSpecial(m){m[ENTRY.y][ENTRY.x]=0;m[CORE.y][CORE.x]=0}
+function tileName(v){return ['floor','wall','spawnG','spawnS','trap','torch'][v]||'floor'}
+function mapToBuild(){
+ grid.innerHTML='';
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const c=document.createElement('div'); c.className='cell '+tileName(userMap[y][x]); c.dataset.x=x;c.dataset.y=y;
+  if(x===ENTRY.x&&y===ENTRY.y)c.className='cell entry';
+  if(x===CORE.x&&y===CORE.y)c.className='cell core';
+  c.addEventListener('click',paintCell); grid.appendChild(c);
+ }
+ renderBuildNPCs();
+}
+function paintCell(e){
+ const x=+e.currentTarget.dataset.x,y=+e.currentTarget.dataset.y;
+ if((x===ENTRY.x&&y===ENTRY.y)||(x===CORE.x&&y===CORE.y))return;
+ const val={wall:1,spawnG:2,spawnS:3,trap:4,torch:5,erase:0}[selected];
+ userMap[y][x]=val; spawnBuildNPCs(); mapToBuild();
+}
+document.querySelectorAll('.tool').forEach(b=>b.onclick=()=>{selected=b.dataset.tool;document.querySelectorAll('.tool').forEach(x=>x.classList.toggle('active',x===b));});
+
+document.getElementById('clearBtn').onclick=()=>{userMap=baseMap(); userMap[2][5]=2;userMap[7][5]=3;userMap[4][9]=4;userMap[5][10]=5;spawnBuildNPCs();mapToBuild();};
+
+function walkable(v){return v!==1}
+function pathExists(m){
+ const q=[[ENTRY.x,ENTRY.y]], seen=new Set([ENTRY.x+','+ENTRY.y]);
+ while(q.length){const [x,y]=q.shift(); if(x===CORE.x&&y===CORE.y)return true;
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy,k=nx+','+ny;if(nx>=0&&ny>=0&&nx<W&&ny<H&&!seen.has(k)&&walkable(m[ny][nx])){seen.add(k);q.push([nx,ny])}}
+ } return false;
+}
+function generateEnemy(){
+ let m=baseMap();
+ // asymmetric layout, guaranteed branchy route
+ const walls=[[5,0],[5,1],[5,2],[1,3],[2,3],[3,3],[9,1],[9,2],[9,3],[9,4],[2,8],[3,8],[4,8],[6,6],[6,7]];
+ walls.forEach(([x,y])=>m[y][x]=1);
+ [[2,1,2],[8,5,3],[4,5,2],[10,7,3],[6,2,4],[1,7,4],[8,8,5]].forEach(([x,y,v])=>m[y][x]=v);
+ clearSpecial(m); if(!pathExists(m))m=baseMap(); return m;
+}
+
+const DIRS=[{x:1,y:0,a:0},{x:0,y:1,a:Math.PI/2},{x:-1,y:0,a:Math.PI},{x:0,y:-1,a:-Math.PI/2}];
+function inside(x,y){return x>=0&&y>=0&&x<W&&y<H}
+function tileOpen(m,x,y){return inside(x,y)&&walkable(m[y][x])}
+function facingFromDelta(dx,dy){if(dx>0)return 0;if(dy>0)return 1;if(dx<0)return 2;return 3}
+function facingAngle(f){return DIRS[(f+4)%4].a}
+function makeTileAgent(gx,gy,speed=.8,extra={}){return {gx,gy,x:gx+.5,y:gy+.5,speed,moving:false,stepWait:0,toGX:gx,toGY:gy,...extra}}
+function beginTileMove(e,m,nx,ny,mult=1){
+ if(e.moving||!tileOpen(m,nx,ny))return false;
+ e.moving=true;e.toGX=nx;e.toGY=ny;
+ // Entire game is tile-authentic: hold, then snap to the neighbouring tile.
+ e.stepWait=Math.max(.09,.42/(Math.max(.2,e.speed)*Math.max(.7,mult)));
+ return true;
+}
+function tickTileMove(e,dt,mult=1){
+ if(!e.moving)return false;
+ e.stepWait-=dt*Math.max(.7,mult);
+ if(e.stepWait<=0){
+   e.gx=e.toGX;e.gy=e.toGY;e.x=e.gx+.5;e.y=e.gy+.5;e.moving=false;e.stepWait=0;return true;
+ }
+ return false;
+}
+function openNeighbors(m,gx,gy){const out=[];for(let f=0;f<4;f++){const d=DIRS[f],nx=gx+d.x,ny=gy+d.y;if(tileOpen(m,nx,ny))out.push({x:nx,y:ny,f})}return out}
+function spawnBuildNPCs(){
+ buildNPCs=[];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(userMap[y][x]===2||userMap[y][x]===3){
+   for(let i=0;i<2;i++)buildNPCs.push(makeTileAgent(x,y,userMap[y][x]===3?.72:.60,{type:userMap[y][x]===3?'spider':'gob',wait:Math.random()*.45}));
+ }
+}
+function renderBuildNPCs(){
+ npcLayer.innerHTML='';
+ for(const n of buildNPCs){const d=document.createElement('div');d.className='npcdot '+(n.type==='spider'?'spider':'');d.style.left=(n.x/W*100)+'%';d.style.top=(n.y/H*100)+'%';npcLayer.appendChild(d)}
+}
+function updateBuildNPCs(dt){
+ for(const n of buildNPCs){
+  if(n.moving){if(tickTileMove(n,dt))n.wait=.12+Math.random()*.48;continue}
+  n.wait-=dt;if(n.wait>0)continue;
+  const choices=openNeighbors(userMap,n.gx,n.gy);if(!choices.length){n.wait=.4;continue}
+  const next=choices[(Math.random()*choices.length)|0];beginTileMove(n,userMap,next.x,next.y);
+ }
+ renderBuildNPCs();
+}
+
+function ready(){
+ if(!pathExists(userMap)){showToast('入口からコアまで通れる経路がありません');return}
+ enemyMap=generateEnemy();startRaid();
+}
+document.getElementById('readyBtn').onclick=ready;
+
+function bfsPath(m, sx,sy, tx,ty){
+ const q=[[sx,sy]], prev=new Map(), key=(x,y)=>x+','+y;prev.set(key(sx,sy),null);
+ while(q.length){const [x,y]=q.shift();if(x===tx&&y===ty)break;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy,k=key(nx,ny);if(nx>=0&&ny>=0&&nx<W&&ny<H&&walkable(m[ny][nx])&&!prev.has(k)){prev.set(k,[x,y]);q.push([nx,ny])}}}
+ let cur=[tx,ty],out=[];if(!prev.has(key(tx,ty)))return out;while(cur){out.push(cur);cur=prev.get(key(cur[0],cur[1]))}return out.reverse();
+}
+
+let hero, enemyHero, monsters=[], enemyMonsters=[], pressed=false, pressTimer=0, touchStart=null;
+function makeMonsters(m){
+ const a=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(m[y][x]===2||m[y][x]===3){const type=m[y][x]===3?'spider':'gob';for(let i=0;i<3;i++)a.push(makeTileAgent(x,y,type==='spider'?.74:.64,{hp:type==='spider'?35:45,type,cool:.8+Math.random()*1.2,wind:0,dead:false,wait:Math.random()*.5,attackPattern:null,parried:false,stagger:0,hitFlash:0,hitPart:null,parts:{HEAD:24,TORSO:45,'LEFT ARM':22,'RIGHT ARM':22}}))}return a;
+}
+function startTurn(e,step){
+ if(e.turning)return false;
+ e.facing=(e.facing+step+4)%4;e.turning=true;e.turnT=.12;return true;
+}
+function tickTurn(e,dt){
+ if(!e.turning)return false;e.turnT-=dt;
+ if(e.turnT<=0){e.a=facingAngle(e.facing);e.turning=false;return true}return false;
+}
+function startRaid(){
+ phase='raid';document.body.dataset.phase='raid';phasePill.textContent='RAID';buildScreen.classList.remove('active');raidScreen.classList.add('active');result.classList.remove('show','gameover');gameOverPending=false;
+ const p=bfsPath(enemyMap,ENTRY.x,ENTRY.y,CORE.x,CORE.y), first=p[1]||[ENTRY.x+1,ENTRY.y], facing=facingFromDelta(first[0]-ENTRY.x,first[1]-ENTRY.y);
+ requestAnimationFrame(resizeRaidCanvas);
+ hero=makeTileAgent(ENTRY.x,ENTRY.y,1.12,{facing,a:facingAngle(facing),hp:100,done:false,turning:false,turnT:0,pause:0,engaged:false,engagedMonster:null,parts:{HEAD:100,TORSO:100,'LEFT ARM':100,'RIGHT ARM':100}});
+ const ep=bfsPath(userMap,ENTRY.x,ENTRY.y,CORE.x,CORE.y), ef=ep[1]?facingFromDelta(ep[1][0]-ENTRY.x,ep[1][1]-ENTRY.y):0;
+ enemyHero=makeTileAgent(ENTRY.x,ENTRY.y,1.02,{facing:ef,a:facingAngle(ef),hp:100,dodge:0,parry:0,done:false,path:ep,pathI:1,turning:false,turnT:0,attackTick:0});
+ monsters=makeMonsters(enemyMap);enemyMonsters=makeMonsters(userMap);pressed=false;pressTimer=0;reactionPause=0;reactionCooldown=0;activePattern=null;
+}
+
+function angleDiff(a,b){return Math.atan2(Math.sin(a-b),Math.cos(a-b))}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function tileDist(a,b){return Math.abs(a.gx-b.gx)+Math.abs(a.gy-b.gy)}
+function nextPathStep(m,sx,sy,tx,ty){const p=bfsPath(m,sx,sy,tx,ty);return p[1]||null}
+
+function monsterAt(list,gx,gy){return list.find(n=>!n.dead&&n.gx===gx&&n.gy===gy)}
+function frontMonster(h,list){const d=DIRS[h.facing];return monsterAt(list,h.gx+d.x,h.gy+d.y)}
+function contactMonster(h,list){
+ if(h.engagedMonster&&!h.engagedMonster.dead&&tileDist(h.engagedMonster,h)<=1)return h.engagedMonster;
+ const front=frontMonster(h,list);if(front)return front;
+ return list.find(n=>!n.dead&&tileDist(n,h)<=1)||null;
+}
+function facingToAdjacent(h,n){
+ const dx=n.gx-h.gx,dy=n.gy-h.gy;
+ if(Math.abs(dx)+Math.abs(dy)!==1)return null;
+ return facingFromDelta(dx,dy);
+}
+function lockCombatTarget(h,n){
+ if(!n||n.dead||tileDist(n,h)>1){h.engaged=false;h.engagedMonster=null;return false}
+ h.engaged=true;h.engagedMonster=n;
+ // Combat is tile-authentic: when contact starts, snap the logical facing to
+ // the occupied neighbour so the locked enemy cannot drift out of view.
+ const desired=facingToAdjacent(h,n);
+ if(desired!==null&&!h.moving){
+  h.facing=desired;h.a=facingAngle(desired);h.turning=false;h.turnT=0;
+  if(h.turnQueue)h.turnQueue.length=0;
+ }
+ return true;
+}
+function flashDamage(fatal=false){
+ damageFlash.classList.remove('on','fatal');void damageFlash.offsetWidth;damageFlash.classList.add(fatal?'fatal':'on');
+ raidScreen.classList.remove('hitShake');void raidScreen.offsetWidth;raidScreen.classList.add('hitShake');
+ setTimeout(()=>{damageFlash.classList.remove('on');raidScreen.classList.remove('hitShake')},320);
+}
+function damageTarget(target,amount){
+ target.hp=Math.max(0,target.hp-amount);
+ if(target===hero){flashDamage(false);showToast('-'+amount+' HP')}
+}
+function triggerReactionChance(pattern){
+ if(reactionPause>0||reactionCooldown>0)return;
+ activePattern=pattern||null;
+ reactionPause=REACTION_FREEZE;reactionCooldown=REACTION_COOLDOWN;
+ reactionPauseEl.innerHTML=(pattern?pattern.label:'READ ATTACK')+'<br><small>'+(pattern?pattern.hint:'構えに応じた方向へSWIPE')+'</small>';
+ showToast(pattern?pattern.zone+'狙い':'READ ATTACK');
+}
+function chooseAttackPattern(n){
+ const p=ATTACK_PATTERNS[(Math.random()*ATTACK_PATTERNS.length)|0];
+ n.attackPattern=p;n.parried=false;return p;
+}
+function applyBodyDamage(target,pattern){
+ const zone=pattern?.zone||'TORSO',amount=pattern?.damage||12;
+ if(target.parts)target.parts[zone]=Math.max(0,(target.parts[zone]??100)-amount);
+ damageTarget(target,amount);
+ showToast(zone+' HIT -'+amount);
+}
+function updateMonsters(list,m,target,dt,allowReactionPause=false){
+ for(const n of list){
+  if(n.dead)continue;
+  n.cool=Math.max(0,n.cool-dt);
+  n.stagger=Math.max(0,(n.stagger||0)-dt);
+  n.hitFlash=Math.max(0,(n.hitFlash||0)-dt);
+  if(n.wind>0){
+   n.wind-=dt;
+   if(n.wind<=0){
+    if(!n.parried&&tileDist(n,target)<=1)applyBodyDamage(target,n.attackPattern);
+    n.attackPattern=null;n.parried=false;
+   }
+   continue;
+  }
+  if(n.moving){tickTileMove(n,dt);continue}
+  n.wait-=dt;if(n.wait>0)continue;
+  if(tileDist(n,target)<=1){
+   if(n.stagger>0){n.wait=.05;continue}
+   if(n.cool<=0){
+    const pattern=chooseAttackPattern(n);
+    n.wind=ENEMY_WINDUP;n.cool=ENEMY_ATTACK_INTERVAL;
+    if(allowReactionPause)triggerReactionChance(pattern);
+   } else n.wait=.08;
+   continue;
+  }
+  let next=null;
+  if(tileDist(n,target)<=5)next=nextPathStep(m,n.gx,n.gy,target.gx,target.gy);
+  if(!next){const opts=openNeighbors(m,n.gx,n.gy);if(opts.length){const o=opts[(Math.random()*opts.length)|0];next=[o.x,o.y]}}
+  if(next&&next[0]===target.gx&&next[1]===target.gy)next=null;
+  if(next)beginTileMove(n,m,next[0],next[1]);else n.wait=.18;
+ }
+}
+function autoAttack(h,list){
+ const ha=facingAngle(h.facing);let best=null,bd=1.01;
+ for(const n of list){if(n.dead)continue;const d=dist(h,n),ta=Math.atan2(n.y-h.y,n.x-h.x);if(d<bd&&Math.abs(angleDiff(ta,ha))<.8){best=n;bd=d}}
+ if(best){best.hp-=18;if(best.hp<=0)best.dead=true}
+}
+function processHeroTile(){
+ const t=enemyMap[hero.gy]?.[hero.gx];if(t===4&&hero.dodge<=0){hero.hp-=10;enemyMap[hero.gy][hero.gx]=0;showToast('罠！ -10 HP')}
+ if(hero.gx===CORE.x&&hero.gy===CORE.y){hero.done=true;endRaid('win')}
+}
+function tryHeroStep(forward=true){
+ if(hero.moving||hero.turning||hero.done)return false;
+ const contact=contactMonster(hero,monsters);
+ if(contact){lockCombatTarget(hero,contact);return false}
+ const f=forward?hero.facing:(hero.facing+2)%4,d=DIRS[f],nx=hero.gx+d.x,ny=hero.gy+d.y;
+ const blocker=monsterAt(monsters,nx,ny);
+ if(blocker){lockCombatTarget(hero,blocker);return false}
+ hero.engaged=false;hero.engagedMonster=null;
+ return beginTileMove(hero,enemyMap,nx,ny);
+}
+function disengageBackstep(){
+ if(hero.moving||hero.turning)return false;
+ const d=DIRS[(hero.facing+2)%4],nx=hero.gx+d.x,ny=hero.gy+d.y;
+ if(!tileOpen(enemyMap,nx,ny)||monsterAt(monsters,nx,ny))return false;
+ if(beginTileMove(hero,enemyMap,nx,ny)){
+  hero.engaged=false;hero.engagedMonster=null;reactionPause=0;activePattern=null;showToast('DISENGAGE');return true
+ }
+ return false;
+}
+function applyRiposte(n,dir){
+ if(!n||n.dead||n.stagger<=0)return false;
+ const a=RIPOSTE_ATTACKS[dir];if(!a)return false;
+ n.parts[a.zone]=Math.max(0,(n.parts[a.zone]??20)-a.damage);
+ n.hp-=a.damage;n.hitPart=a.zone;n.hitFlash=.28;n.stagger=0;n.cool=Math.max(n.cool,.85);
+ showToast(a.label+' -'+a.damage);
+ if(n.hp<=0){n.dead=true;hero.engaged=false;hero.engagedMonster=null;activePattern=null;showToast('ENEMY DOWN')}
+ return true;
+}
+function attemptDirectionalParry(n,dir){
+ if(!n||n.dead||n.wind<=0||!n.attackPattern)return false;
+ const ok=n.attackPattern.parry.includes(dir);
+ reactionPause=0;activePattern=null;
+ if(ok){
+  n.parried=true;n.wind=0;n.attackPattern=null;n.stagger=RIPOSTE_WINDOW;n.cool=Math.max(n.cool,1.05);
+  showToast('PARRY '+dir.toUpperCase()+' — RIPOSTE');
+  return true;
+ }
+ n.wind=Math.min(n.wind,.13);
+ showToast('WRONG PARRY');
+ return true;
+}
+function handleRaidSwipe(dir){
+ if(phase!=='raid'||hero.done||gameOverPending)return;
+ const enemy=contactMonster(hero,monsters);
+ if(enemy)lockCombatTarget(hero,enemy);
+ const engaged=hero.engagedMonster&&!hero.engagedMonster.dead?hero.engagedMonster:null;
+ if(engaged&&engaged.wind>0){attemptDirectionalParry(engaged,dir);return}
+ if(engaged&&engaged.stagger>0){applyRiposte(engaged,dir);return}
+ if(engaged){if(dir==='down')disengageBackstep();else showToast('WAIT / ↓ DISENGAGE');return}
+ if(hero.moving||hero.turning)return;
+ if(dir==='left'){startTurn(hero,-1);showToast('LEFT TURN')}
+ else if(dir==='right'){startTurn(hero,1);showToast('RIGHT TURN')}
+ else if(dir==='up'){if(tryHeroStep(true))showToast('STEP FORWARD')}
+ else if(dir==='down'){if(tryHeroStep(false))showToast('STEP BACK')}
+}
+function updateHero(dt){
+ hero.pause=Math.max(0,hero.pause-dt);
+ if(hero.turning)tickTurn(hero,dt);
+ else if(hero.moving){if(tickTileMove(hero,dt)){processHeroTile()}}
+ updateMonsters(monsters,enemyMap,hero,dt,true);
+ const locked=contactMonster(hero,monsters);
+ if(locked)lockCombatTarget(hero,locked)
+ else{hero.engaged=false;hero.engagedMonster=null}
+ if(hero.hp<=0&&!gameOverPending)triggerGameOver()
+}
+function updateEnemyHero(dt){
+ const e=enemyHero;if(e.done)return;e.parry=Math.max(0,(e.parry||0)-dt);e.dodge=Math.max(0,(e.dodge||0)-dt);
+ if(e.turning)tickTurn(e,dt);
+ else if(e.moving){if(tickTileMove(e,dt)&&e.path[e.pathI]&&e.gx===e.path[e.pathI][0]&&e.gy===e.path[e.pathI][1])e.pathI++}
+ else{
+  const target=e.path[Math.min(e.pathI,e.path.length-1)];
+  if(target){
+   if(e.gx===target[0]&&e.gy===target[1])e.pathI++;
+   else{const desired=facingFromDelta(target[0]-e.gx,target[1]-e.gy);if(e.facing!==desired){const right=(desired-e.facing+4)%4;startTurn(e,right===3?-1:right===2?1:right)}else beginTileMove(e,userMap,target[0],target[1])}
+  }
+ }
+ updateMonsters(enemyMonsters,userMap,e,dt,false);
+ e.attackTick-=dt;if(e.attackTick<=0){autoAttack(e,enemyMonsters);e.attackTick=.66}
+ if(Math.random()<.025)e.parry=.22;
+ if(e.gx===CORE.x&&e.gy===CORE.y&&!e.moving){e.done=true;if(!hero.done)endRaid('enemywin')}
+ if(e.hp<=0)e.done=true;
+}
+
+let gameOverPending=false;
+function triggerGameOver(){
+ if(gameOverPending)return;gameOverPending=true;hero.hp=0;hero.done=true;pressed=false;phasePill.textContent='DEAD';
+ flashDamage(true);showToast('HP 0');
+ setTimeout(()=>endRaid('gameover'),700);
+}
+function endRaid(kind){if(result.classList.contains('show'))return;result.classList.add('show');result.classList.toggle('gameover',kind==='gameover');pressed=false;
+ const txt={win:['VICTORY','敵コアに到達しました。右上ワイプでは敵勇者があなたのダンジョンを攻略し続けています。'],lose:['DEFEAT','あなたの勇者は倒れました。'],gameover:['GAME OVER','HPが0になりました。v0.9では探索も戦闘もボタンなしのスワイプ操作です。敵の構えを読み、方向パリィから部位反撃へつなげます。'],enemywin:['RACE LOST','敵勇者が先にあなたのコアへ到達しました。'] }[kind];resultTitle.textContent=txt[0];resultText.textContent=txt[1];}
+
+document.getElementById('againBtn').onclick=()=>{phase='build';document.body.dataset.phase='build';phasePill.textContent='BUILD';raidScreen.classList.remove('active');buildScreen.classList.add('active');result.classList.remove('show','gameover');gameOverPending=false;spawnBuildNPCs();mapToBuild()};
+
+function showToast(s){toast.textContent=s;toast.classList.add('on');clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove('on'),900)}
+
+function swipeDirection(dx,dy){
+ const adX=Math.abs(dx),adY=Math.abs(dy);if(Math.max(adX,adY)<30)return null;
+ if(adX>adY)return dx>0?'right':'left';
+ return dy>0?'down':'up';
+}
+view.addEventListener('pointerdown',e=>{if(phase!=='raid')return;touchStart={x:e.clientX,y:e.clientY,t:performance.now()};view.setPointerCapture(e.pointerId)});
+view.addEventListener('pointerup',e=>{if(phase!=='raid'||!touchStart)return;const dx=e.clientX-touchStart.x,dy=e.clientY-touchStart.y,dir=swipeDirection(dx,dy);touchStart=null;if(dir)handleRaidSwipe(dir)});
+view.addEventListener('pointercancel',()=>{touchStart=null});
+
+function hasLineOfSight(m,px,py,tx,ty){
+ const dx=tx-px,dy=ty-py,dist=Math.hypot(dx,dy);if(dist<.08)return true;
+ const steps=Math.max(2,Math.ceil(dist/.035));
+ const targetGX=Math.floor(tx),targetGY=Math.floor(ty);
+ for(let i=1;i<steps;i++){
+  const t=i/steps,x=px+dx*t,y=py+dy*t,gx=Math.floor(x),gy=Math.floor(y);
+  if(gx===targetGX&&gy===targetGY)continue;
+  if(!inside(gx,gy)||m[gy][gx]===1)return false;
+ }
+ return true;
+}
+
+function raycast(c,m,p,mons,focusMonster=null,scale=1){
+ const cw=c.canvas.width,ch=c.canvas.height;
+ c.imageSmoothingEnabled=false;
+ c.fillStyle='#050505';c.fillRect(0,0,cw,ch);
+ // ceiling/floor bands keep the world intentionally flat and old-school.
+ c.fillStyle='#0d0d0d';c.fillRect(0,0,cw,ch*.48);
+ c.fillStyle='#161616';c.fillRect(0,ch*.48,cw,ch*.52);
+ for(let y=Math.floor(ch*.52);y<ch;y+=4){c.fillStyle=(y%8===0)?'#202020':'#121212';c.fillRect(0,y,cw,1)}
+ const fov=Math.PI/2.7,cols=Math.floor(cw/4),colW=4,depthBuffer=new Array(cols).fill(14);
+ for(let i=0;i<cols;i++){
+  const ra=p.a-fov/2+fov*i/cols,dx=Math.cos(ra),dy=Math.sin(ra);let d=.03,tx=0,ty=0,hit=0;
+  while(d<14){const x=p.x+dx*d,y=p.y+dy*d;tx=Math.floor(x);ty=Math.floor(y);if(tx<0||ty<0||tx>=W||ty>=H){hit=1;break}if(m[ty][tx]===1){hit=1;break}d+=.06}
+  const corr=Math.max(.1,d*Math.cos(ra-p.a)),wallH=Math.min(ch*1.12,ch/(corr+.05)*.86),top=(ch-wallH)/2;depthBuffer[i]=corr;
+  const tier=corr<1.7?0:corr<3.2?1:corr<5?2:3;
+  const shades=['#ededE7','#a8a8a2','#666662','#353532'];c.fillStyle=shades[tier];c.fillRect(i*colW,top,colW+1,wallH);
+  c.fillStyle=tier<2?'#161616':'#050505';
+  for(let yy=Math.ceil(top)+((i&1)*4);yy<top+wallH;yy+=8)c.fillRect(i*colW,yy,colW,2);
+ }
+ // tile events: strong symbolic glyphs instead of soft glows
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const v=m[y][x];if(v!==4&&v!==5&&!(x===CORE.x&&y===CORE.y))continue;
+  const dx=x+.5-p.x,dy=y+.5-p.y,d=Math.hypot(dx,dy),a=angleDiff(Math.atan2(dy,dx),p.a);if(Math.abs(a)>fov/2||d>7)continue;
+  if(!hasLineOfSight(m,p.x,p.y,x+.5,y+.5))continue;
+  const sx=(.5+a/fov)*cw,sy=ch*.65,sz=Math.max(2,Math.floor(12/(d*.35+1))),col=Math.max(0,Math.min(cols-1,Math.floor(sx/colW))),spriteDepth=d*Math.cos(a);if(spriteDepth>=depthBuffer[col]-.08)continue;
+  c.fillStyle=(v===4||x===CORE.x&&y===CORE.y)?'#ef2b2b':'#f3f3ed';
+  if(v===4){for(let k=-1;k<=1;k++){c.beginPath();c.moveTo(sx+k*sz,sy+sz);c.lineTo(sx+k*sz+sz/2,sy-sz);c.lineTo(sx+k*sz+sz,sy+sz);c.fill()}}
+  else{c.fillRect(Math.round(sx-sz/2),Math.round(sy-sz),sz,sz*2)}
+ }
+ const sprites=[];for(const n of mons||[]){
+  if(n.dead)continue;
+  const dx=n.x-p.x,dy=n.y-p.y,d=Math.hypot(dx,dy);
+  let a=angleDiff(Math.atan2(dy,dx),p.a);
+  const focused=n===focusMonster&&tileDist(n,p)<=1;
+  // A locked adjacent combat target is deliberately centered. The game state
+  // is still 2D/cardinal; this only prevents a combatant from visually
+  // collapsing into the center marker after an attack/hit-flash.
+  if(focused)a=0;
+  if((focused||Math.abs(a)<fov*.62)&&d>.15&&d<9&&hasLineOfSight(m,p.x,p.y,n.x,n.y))sprites.push({n,d,a,focused})
+ }
+ sprites.sort((a,b)=>b.d-a.d);
+ for(const s of sprites){
+  const sx=Math.round((.5+s.a/fov)*cw),col=Math.max(0,Math.min(cols-1,Math.floor(sx/colW))),spriteDepth=s.d*Math.cos(s.a);if(spriteDepth>=depthBuffer[col]-.08)continue;
+  const baseSize=Math.max(6,Math.min(ch*.72,Math.round(ch/(s.d+.15)*.52))),size=s.focused?Math.max(baseSize,Math.round(ch*.46)):baseSize,x=Math.round(sx-size*.24),y=Math.round(ch/2-size*.34),w=Math.round(size*.48),h=Math.round(size*.68);
+  c.fillStyle=s.n.type==='spider'?'#ef2b2b':'#ededE7';c.fillRect(x,y,w,h);
+  c.fillStyle='#050505';c.fillRect(x+Math.floor(w*.22),y+Math.floor(h*.18),Math.max(1,Math.floor(w*.15)),Math.max(1,Math.floor(h*.11)));c.fillRect(x+Math.floor(w*.63),y+Math.floor(h*.18),Math.max(1,Math.floor(w*.15)),Math.max(1,Math.floor(h*.11)));
+  if(s.n.type==='spider'){c.fillStyle='#ededE7';for(let k=0;k<3;k++){c.fillRect(x-3-k,y+3+k*3,4,2);c.fillRect(x+w-1+k,y+3+k*3,4,2)}}
+  if(s.n.hitFlash>0){
+   c.strokeStyle='#fff';c.lineWidth=2;
+   const py=s.n.hitPart==='HEAD'?y:y+Math.floor(h*.28),ph=s.n.hitPart==='HEAD'?Math.floor(h*.25):Math.floor(h*.45);
+   c.strokeRect(x-3,py-2,w+6,Math.max(5,ph));
+  }
+  if(s.n.wind>0&&s.n.attackPattern){
+   c.strokeStyle='#ef2b2b';c.lineWidth=2;c.strokeRect(x-3,y-3,w+6,h+6);
+   c.strokeStyle='#f3f3ed';c.lineWidth=3;c.beginPath();
+   const cx=x+w/2,cy=y+h*.42,p=s.n.attackPattern.id;
+   if(p==='OVERHEAD'){c.moveTo(cx-1,y-14);c.lineTo(cx+2,cy)}
+   else if(p==='CUT_L'){c.moveTo(x-13,y+2);c.lineTo(cx,cy)}
+   else if(p==='CUT_R'){c.moveTo(x+w+13,y+2);c.lineTo(cx,cy)}
+   else{c.moveTo(cx,cy);c.lineTo(cx,cy+Math.max(12,h*.45))}
+   c.stroke();
+   c.fillStyle='#ef2b2b';
+   if(s.n.attackPattern.zone==='HEAD')c.fillRect(x,y,w,Math.max(2,Math.floor(h*.2)));
+   else if(s.n.attackPattern.zone==='TORSO')c.fillRect(x,y+Math.floor(h*.25),w,Math.max(2,Math.floor(h*.28)));
+   else if(s.n.attackPattern.zone==='LEFT ARM')c.fillRect(x-3,y+Math.floor(h*.25),4,Math.max(4,Math.floor(h*.35)));
+   else c.fillRect(x+w-1,y+Math.floor(h*.25),4,Math.max(4,Math.floor(h*.35)));
+  }
+ }
+ // central facing marker: one tiny red pixel, not an FPS crosshair.
+ c.fillStyle='#ef2b2b';c.fillRect((cw/2|0)-1,(ch/2|0)-1,3,3);
+}
+function drawRaid(){
+ raycast(ctx,enemyMap,hero,monsters,hero.engagedMonster);raycast(pctx,userMap,enemyHero,enemyMonsters,null);
+ hpEl.textContent=Math.ceil(hero.hp);distEl.textContent=Math.ceil(Math.hypot(hero.x-(CORE.x+.5),hero.y-(CORE.y+.5)))+'m';
+ const engaged=contactMonster(hero,monsters);hero.engaged=!!engaged;if(engaged)hero.engagedMonster=engaged;
+ combatStateEl.classList.toggle('on',!!engaged);
+ if(engaged){
+  enemyHpEl.textContent=Math.max(0,Math.ceil(engaged.hp));
+  if(engaged.wind>0&&engaged.attackPattern)combatHintEl.textContent=engaged.attackPattern.label+' / '+engaged.attackPattern.hint;
+  else if(engaged.stagger>0)combatHintEl.textContent='RIPOSTE — SWIPE TO HIT PART';
+  else combatHintEl.textContent='READ / ↓ DISENGAGE';
+ } else {enemyHpEl.textContent='--';combatHintEl.textContent='EXPLORE';}
+ const threat=!!(engaged&&engaged.wind>0&&engaged.attackPattern);
+ if(threat)telegraph.textContent=engaged.attackPattern.label+' → '+engaged.attackPattern.hint;
+ else if(engaged&&engaged.stagger>0)telegraph.textContent='RIPOSTE: ↑頭 / ↓胴 / ←→腕';
+ else telegraph.textContent='敵の構えを見てスワイプ';
+ telegraph.classList.toggle('on',threat||!!(engaged&&engaged.stagger>0));
+ reactionPauseEl.classList.toggle('on',reactionPause>0);
+}
+function loop(t){
+ const rawDt=Math.min(.033,(t-last)/1000);last=t;
+ const dt=rawDt*GAME_SPEED;
+ if(phase==='build')updateBuildNPCs(dt);
+ else if(phase==='raid'&&!result.classList.contains('show')){
+  if(gameOverPending){drawRaid();raf=requestAnimationFrame(loop);return}
+  reactionCooldown=Math.max(0,reactionCooldown-rawDt);
+  if(reactionPause>0){reactionPause=Math.max(0,reactionPause-rawDt);drawRaid()}
+  else{updateHero(dt);updateEnemyHero(dt);drawRaid()}
+ }
+ raf=requestAnimationFrame(loop)
+}
+
+function resizeRaidCanvas(){
+ const r=raidScreen.getBoundingClientRect();
+ if(!r.width||!r.height)return;
+ const portrait=r.height>r.width*1.15;
+ const iw=portrait?240:320;
+ const ih=Math.max(180,Math.min(460,Math.round(iw*r.height/r.width)));
+ if(view.width!==iw||view.height!==ih){view.width=iw;view.height=ih;ctx.imageSmoothingEnabled=false}
+}
+window.addEventListener('resize',resizeRaidCanvas,{passive:true});
+window.addEventListener('orientationchange',()=>setTimeout(resizeRaidCanvas,120),{passive:true});
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+}
+
+userMap=baseMap();userMap[2][5]=2;userMap[7][5]=3;userMap[4][9]=4;userMap[5][10]=5;spawnBuildNPCs();mapToBuild();resizeRaidCanvas();requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
